@@ -1,15 +1,29 @@
+# Gradle / IDE
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+.gradle/
+.idea/
+.cxx/
+.externalNativeBuild/
+captures/
+build/
+.kotlin/
+
+# OS
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+
+# Android local config
 local.properties
+
+# Signing — NEVER commit
+keystore.properties
+*.keystore
+*.jks
+
+# Firebase / API keys
+google-services.json
+admob.properties
+
+# Sideload/build artifacts
+store/sideload/
+*.apk
+*.aab
