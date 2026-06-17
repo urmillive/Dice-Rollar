@@ -1,4 +1,15 @@
 <resources>
-    <string name="app_name">DiceRoller</string>
-    <string name="roll_dice">Roll Dice</string>
+    <string name="app_name">Dice Rollar</string>
+    <string name="roll_dice">Roll</string>
+    <string name="dice_d4">d4</string>
+    <string name="dice_d6">d6</string>
+    <string name="dice_d8">d8</string>
+    <string name="dice_d10">d10</string>
+    <string name="dice_d12">d12</string>
+    <string name="dice_d20">d20</string>
+    <string name="dice_d100">d100</string>
+    <string name="history_title">Recent rolls</string>
+    <string name="history_empty">No rolls yet — pick a die and tap Roll</string>
+    <string name="modifier_label">Modifier</string>
+    <string name="dice_count_label">Dice</string>
 </resources>
