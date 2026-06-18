@@ -1,0 +1,7 @@
+Initial internal build.
+
+• All standard polyhedral dice: d4, d6, d8, d10, d12, d20, d100
+• Visible dice with tumble animation on every roll
+• Roll up to 10 dice at once with a ±99 modifier
+• Roll history saved on-device (last 20 rolls)
+• No ads, no signup, no internet required

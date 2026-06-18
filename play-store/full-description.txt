@@ -1,0 +1,34 @@
+Dice Rollar is a clean, fast dice roller built for Dungeons & Dragons, Pathfinder, and any tabletop RPG that needs honest random rolls.
+
+Every roll is animated — you see the dice tumble and settle on a real face, not just a number popping out of nowhere. It looks like dice. It feels like dice.
+
+WHAT YOU GET
+• Every standard polyhedral die: d4, d6, d8, d10, d12, d20, d100
+• Roll up to 10 dice at once
+• Add a modifier from −99 to +99 (perfect for attack rolls, skill checks, damage)
+• Standard dice notation in every result (2d20+5, 3d6, 1d8−2)
+• Roll history kept on your device — see your last 20 rolls at a glance
+• Clear history any time with one tap
+• Each die shown as its real shape: triangle for d4, hexagon for d20, and so on
+
+WHAT YOU DON'T GET
+• No ads
+• No signup, no account, no email harvesting
+• No tracking, no analytics
+• No internet permission — works fully offline
+• No bloat, no in-app currency, no nag screens
+
+WHY ANOTHER DICE ROLLER?
+Most dice apps either look like a spreadsheet or stuff you with ads and "premium tiers" for features that should be free. Dice Rollar is the opposite — small, fast, native, and free, with the dice front and center where they belong.
+
+Built with Jetpack Compose for smooth animation on every modern Android device.
+
+PERFECT FOR
+• D&D 5e, Pathfinder 2e, Call of Cthulhu, Shadowrun, GURPS — anything that uses polyhedral dice
+• Game masters running encounters
+• Players who left their physical dice at home
+• Anyone who needs a quick honest random number
+
+This is an early version. Coming soon: roll presets, advantage/disadvantage shortcuts, exploding dice, custom dice sets, and macros for common rolls.
+
+Feedback? Bug reports? Email urmillive@gmail.com — every email is read.

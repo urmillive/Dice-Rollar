@@ -1,0 +1,1 @@
+Fast, animated dice for D&D and tabletop RPGs - d4 to d100, with modifiers.
