@@ -45,12 +45,20 @@ fun RollScreen(
     val settings = state.settings
 
     val resultValues = state.lastResult?.values
-    val cells = remember(settings.diceCount, settings.sameColorAllDice, resultValues) {
-        val baseColor = DicePalette.colorAt(0)
+    val colorSeed = state.lastResult?.timestamp ?: 0L
+    val cells = remember(
+        settings.diceCount,
+        settings.sameColorAllDice,
+        resultValues,
+        colorSeed
+    ) {
+        val rng = kotlin.random.Random(colorSeed)
+        val shuffled = DicePalette.cellColors.shuffled(rng)
+        val baseColor = shuffled.first()
         List(settings.diceCount) { idx ->
             DiceCellState(
                 value = resultValues?.getOrNull(idx),
-                bgColor = if (settings.sameColorAllDice) baseColor else DicePalette.colorAt(idx)
+                bgColor = if (settings.sameColorAllDice) baseColor else shuffled[idx % shuffled.size]
             )
         }
     }
