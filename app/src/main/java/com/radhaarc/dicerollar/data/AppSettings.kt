@@ -10,5 +10,6 @@ data class AppSettings(
     val showBorders: Boolean = true,
     val sameColorAllDice: Boolean = false,
     val pipColorIndex: Int = 0,
-    val diceCount: Int = 3
+    val diceCount: Int = 3,
+    val modifier: Int = 0
 )

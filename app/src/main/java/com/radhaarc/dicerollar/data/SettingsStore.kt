@@ -25,7 +25,8 @@ class SettingsStore(private val context: Context) {
             showBorders = prefs[KEY_SHOW_BORDERS] ?: true,
             sameColorAllDice = prefs[KEY_SAME_COLOR] ?: false,
             pipColorIndex = prefs[KEY_PIP_COLOR_INDEX] ?: 0,
-            diceCount = (prefs[KEY_DICE_COUNT] ?: 3).coerceIn(1, MAX_DICE)
+            diceCount = (prefs[KEY_DICE_COUNT] ?: 3).coerceIn(1, MAX_DICE),
+            modifier = (prefs[KEY_MODIFIER] ?: 0).coerceIn(-MAX_MODIFIER, MAX_MODIFIER)
         )
     }
 
@@ -41,14 +42,19 @@ class SettingsStore(private val context: Context) {
     suspend fun setDiceCount(count: Int) = context.settingsDataStore.edit {
         it[KEY_DICE_COUNT] = count.coerceIn(1, MAX_DICE)
     }
+    suspend fun setModifier(modifier: Int) = context.settingsDataStore.edit {
+        it[KEY_MODIFIER] = modifier.coerceIn(-MAX_MODIFIER, MAX_MODIFIER)
+    }
 
     companion object {
         const val MAX_DICE = 12
+        const val MAX_MODIFIER = 99
         private val KEY_DIE_TYPE = stringPreferencesKey("die_type")
         private val KEY_DISPLAY = stringPreferencesKey("display_mode")
         private val KEY_SHOW_BORDERS = booleanPreferencesKey("show_borders")
         private val KEY_SAME_COLOR = booleanPreferencesKey("same_color")
         private val KEY_PIP_COLOR_INDEX = intPreferencesKey("pip_color_index")
         private val KEY_DICE_COUNT = intPreferencesKey("dice_count")
+        private val KEY_MODIFIER = intPreferencesKey("modifier")
     }
 }

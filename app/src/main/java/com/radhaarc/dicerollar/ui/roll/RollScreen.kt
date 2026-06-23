@@ -1,21 +1,17 @@
 package com.radhaarc.dicerollar.ui.roll
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -32,17 +30,19 @@ import com.radhaarc.dicerollar.data.SettingsStore
 import com.radhaarc.dicerollar.ui.components.BottomBar
 import com.radhaarc.dicerollar.ui.components.DiceCellState
 import com.radhaarc.dicerollar.ui.components.DiceGrid
-import com.radhaarc.dicerollar.ui.components.TotalPill
+import com.radhaarc.dicerollar.ui.components.RollResultCard
 import com.radhaarc.dicerollar.ui.theme.DicePalette
 
 @Composable
 fun RollScreen(
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: RollViewModel = viewModel(factory = RollViewModel.Factory)
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val settings = state.settings
+    val haptics = LocalHapticFeedback.current
 
     val resultValues = state.lastResult?.values
     val colorSeed = state.lastResult?.timestamp ?: 0L
@@ -66,6 +66,13 @@ fun RollScreen(
     val rollInteraction = remember { MutableInteractionSource() }
     val barInteraction = remember { MutableInteractionSource() }
 
+    val triggerRoll = {
+        if (!state.isRolling) {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            viewModel.onEvent(RollEvent.Roll)
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
@@ -74,7 +81,7 @@ fun RollScreen(
                     interactionSource = rollInteraction,
                     indication = null,
                     enabled = !state.isRolling
-                ) { viewModel.onEvent(RollEvent.Roll) }
+                ) { triggerRoll() }
         ) {
             DiceGrid(
                 die = settings.dieType,
@@ -86,29 +93,22 @@ fun RollScreen(
             )
         }
 
-        AnimatedVisibility(
-            visible = state.lastResult != null && !state.isRolling,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .windowInsetsPadding(
-                    WindowInsets.safeDrawing.only(WindowInsetsSides.Top)
-                )
-                .padding(top = 12.dp)
-        ) {
-            TotalPill(total = state.lastResult?.total ?: 0)
-        }
-
-        Box(
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 16.dp),
-            contentAlignment = Alignment.Center
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            RollResultCard(
+                notation = state.lastResult?.notation.orEmpty(),
+                total = state.lastResult?.total ?: 0,
+                visible = state.lastResult != null && !state.isRolling,
+                modifier = Modifier.widthIn(max = 520.dp)
+            )
+
             Box(
                 modifier = Modifier
                     .widthIn(max = 520.dp)
@@ -124,14 +124,19 @@ fun RollScreen(
             ) {
                 BottomBar(
                     count = settings.diceCount,
-                    onDecrement = { viewModel.onEvent(RollEvent.DecrementCount) },
-                    onIncrement = { viewModel.onEvent(RollEvent.IncrementCount) },
+                    modifier = settings.modifier,
+                    onDecrementCount = { viewModel.onEvent(RollEvent.DecrementCount) },
+                    onIncrementCount = { viewModel.onEvent(RollEvent.IncrementCount) },
+                    onDecrementModifier = { viewModel.onEvent(RollEvent.DecrementModifier) },
+                    onIncrementModifier = { viewModel.onEvent(RollEvent.IncrementModifier) },
+                    onHistory = onOpenHistory,
                     onSettings = onOpenSettings,
-                    decrementEnabled = settings.diceCount > 1 && !state.isRolling,
-                    incrementEnabled = settings.diceCount < SettingsStore.MAX_DICE && !state.isRolling
+                    decrementCountEnabled = settings.diceCount > 1 && !state.isRolling,
+                    incrementCountEnabled = settings.diceCount < SettingsStore.MAX_DICE && !state.isRolling,
+                    decrementModifierEnabled = settings.modifier > -SettingsStore.MAX_MODIFIER && !state.isRolling,
+                    incrementModifierEnabled = settings.modifier < SettingsStore.MAX_MODIFIER && !state.isRolling
                 )
             }
         }
     }
 }
-

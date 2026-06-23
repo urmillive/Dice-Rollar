@@ -4,4 +4,6 @@ sealed interface RollEvent {
     data object Roll : RollEvent
     data object IncrementCount : RollEvent
     data object DecrementCount : RollEvent
+    data object IncrementModifier : RollEvent
+    data object DecrementModifier : RollEvent
 }

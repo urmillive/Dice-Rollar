@@ -50,6 +50,8 @@ class RollViewModel(
             RollEvent.Roll -> roll()
             RollEvent.IncrementCount -> adjustCount(+1)
             RollEvent.DecrementCount -> adjustCount(-1)
+            RollEvent.IncrementModifier -> adjustModifier(+1)
+            RollEvent.DecrementModifier -> adjustModifier(-1)
         }
     }
 
@@ -61,12 +63,24 @@ class RollViewModel(
         }
     }
 
+    private fun adjustModifier(delta: Int) {
+        viewModelScope.launch {
+            val current = uiState.value.settings.modifier
+            val next = (current + delta).coerceIn(-SettingsStore.MAX_MODIFIER, SettingsStore.MAX_MODIFIER)
+            if (next != current) settingsStore.setModifier(next)
+        }
+    }
+
     private fun roll() {
         if (transient.value.isRolling) return
         val settings: AppSettings = uiState.value.settings
         viewModelScope.launch {
             val result = diceRoller.roll(
-                RollRequest(die = settings.dieType, count = settings.diceCount, modifier = 0)
+                RollRequest(
+                    die = settings.dieType,
+                    count = settings.diceCount,
+                    modifier = settings.modifier
+                )
             )
             transient.update { it.copy(isRolling = true, lastResult = null) }
             delay(rollDurationMs)
