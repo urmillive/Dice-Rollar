@@ -1,9 +1,27 @@
 # Dice-Rollar — Monetization Plan
 
-**Date:** 2026-06-24
+**Date:** 2026-06-24 · **Updated:** 2026-06-27 (gap-find pass)
 **Branch:** `feat/monetization-plan`
 **Target version:** 1.1.0 / versionCode 10 (skip 4–9 to leave room for hotfixes)
 **Status:** ⬜ PLAN ONLY — no code in this branch yet.
+
+---
+
+## 0. Pre-flight (do this **before** M1)
+
+These have lead times measured in days, not hours. Start them in parallel with M1 — if any is missing on M5/release day, the launch slips.
+
+| Item | Owner action | Lead time | Blocks |
+|---|---|---|---|
+| **Play merchant account** | Play Console → Setup → Payments profile → create | 1–3 days | All IAP work |
+| **Tax info** | Payments profile → tax form (W-8BEN for non-US individuals) | Same form | First payout |
+| **Bank account verification** | Payments profile → bank → micro-deposit verify | 3–5 business days | First payout |
+| **License tester accounts** | Play Console → Setup → License testing → add Gmail addresses (your dev account + a backup) | Minutes | Real billing in internal track |
+| **AdMob account + Play link** | apply at admob.google.com, then link the Play Store app inside AdMob | 1–2 days approval | Real ad unit IDs (M6) |
+| **Promo codes earmarked** | Note: Play gives 500 one-time-product promo codes per quarter — reserve ~20 for reviewers/friends | n/a | Free Pro grants without real charges |
+| **Privacy policy hosting decided** | Pick one: GitHub Pages (free, ~10 min), Vercel (free, ~5 min), or your radhaarc.com domain | 1 hour | Play Console listing update in M5 |
+
+**Default for privacy hosting:** GitHub Pages under `urmillive/dice-rollar-legal` repo — zero-cost, version-controlled, no extra account.
 
 ---
 
@@ -65,6 +83,8 @@ billing-ktx = "7.1.1"             # Play Billing v7 + Kotlin coroutines wrapper
 
 App ID lives in `local.properties` (`ADMOB_APP_ID=…`) and is injected via `BuildConfig` / manifest placeholders — **never hardcoded**. Test ID `ca-app-pub-3940256099942544~3347511713` for debug builds.
 
+**App size budget:** play-services-ads adds ~3–4 MB to the AAB (current release is ~3.0 MB). Expect the v1.1.0 AAB to land around **6–7 MB** — still tiny by Play standards but note for the listing's "App size" badge.
+
 ### 3.3 Module layout
 
 ```
@@ -89,6 +109,27 @@ app/src/main/java/com/radhaarc/dicerollar/
 - `RollScreen` reads `state.entitlement`; conditionally composes `BannerAdView` above the bottom bar.
 - After each roll, `RollViewModel.onRollSettled()` calls `InterstitialController.maybeShow(rollCount)` — controller checks Pro flag + cooldown + load state.
 
+**AdView lifecycle (mandatory):** `BannerAdView` uses `AndroidView` + `DisposableEffect` to call `adView.pause()` on lifecycle pause, `adView.resume()` on resume, and `adView.destroy()` on dispose. Skipping this leaks the Activity on every navigation. Sample:
+
+```kotlin
+DisposableEffect(adView) {
+    val lifecycleObserver = LifecycleEventObserver { _, event ->
+        when (event) {
+            Lifecycle.Event.ON_PAUSE  -> adView.pause()
+            Lifecycle.Event.ON_RESUME -> adView.resume()
+            else -> Unit
+        }
+    }
+    lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
+    onDispose {
+        lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
+        adView.destroy()
+    }
+}
+```
+
+**MobileAds.initialize cold-start cost:** ~500 ms on mid-range devices. Do **not** call it in `Application.onCreate` — call it lazily from `AdsInitializer.initIfNeeded()` triggered after the first frame of the Roll screen (`LaunchedEffect(Unit) { ... }`). Splash budget stays clean.
+
 ### 3.5 IAP flow
 
 1. User taps "Remove Ads" link in `SettingsScreen` (new row, above "Appearance").
@@ -96,6 +137,21 @@ app/src/main/java/com/radhaarc/dicerollar/
 3. Buy → `BillingClient.launchBillingFlow()`.
 4. On `PurchasesUpdatedListener` success → `acknowledgePurchase()` → `PurchaseRepository.markPro()`.
 5. State persists in DataStore (`pro_unlocked = true`). On every app launch we also re-`queryPurchases()` and reconcile — protects against the user reinstalling on the same Google account.
+
+**Purchase state matrix (handle ALL of these, not just SUCCESS):**
+
+| `Purchase.purchaseState` | Action |
+|---|---|
+| `PURCHASED` + `isAcknowledged == false` | `acknowledgePurchase()` then `markPro()` |
+| `PURCHASED` + `isAcknowledged == true` | `markPro()` (idempotent) — happens on re-launch after a prior buy |
+| `PENDING` | **Critical for India (UPI/Net Banking).** Show "Payment processing — Pro unlocks when settled." Persist nothing yet. Re-`queryPurchases()` on next launch picks up the eventual `PURCHASED`. |
+| `UNSPECIFIED_STATE` | Treat as Free; log warning |
+
+**Voided / refunded purchases:** Play's 48 h auto-refund flips a `PURCHASED` purchase to **revoked** silently — `queryPurchases()` no longer returns it. So `PurchaseRepository.reconcile()` must do `if (queryPurchases().isEmpty()) markFree()` on every launch — DataStore is a *cache*, never the source of truth. Skipping this = users keep Pro after refund.
+
+**Family Library:** disabled in v1. (Play Console → Monetize → Products → `pro_remove_ads` → Family Library = OFF.) Revisit only if support requests pile up.
+
+**Localized pricing:** Use Play's auto-conversion default. Cap not needed — Play won't let it drop below ~$0.99 equivalent in any market.
 
 ### 3.6 Consent (UMP, mandatory for EEA + Brazil)
 
@@ -112,6 +168,35 @@ app/src/main/java/com/radhaarc/dicerollar/
 
 Real IDs come from the AdMob console **after** the app is reviewed and approved in Play Console — chicken-and-egg means v1.1.0 must ship to internal-testing first with test IDs, then a v1.1.1 swap to real IDs once AdMob links the app.
 
+### 3.8 ProGuard / R8 keep rules
+
+Release builds (`minifyEnabled = true`) **will crash** on first Billing query or AdMob load without keep rules. The bundled rules from each SDK are usually enough, but verify by running the release variant on the test phone before tagging.
+
+Add to `app/proguard-rules.pro`:
+
+```proguard
+# Play Billing — keep callback classes called via reflection
+-keep class com.android.billingclient.api.** { *; }
+
+# Play Services Ads — bundled rules handle most, but add for safety
+-keep public class com.google.android.gms.ads.** { public *; }
+
+# UMP consent
+-keep class com.google.android.ump.** { *; }
+```
+
+**Test gate:** before merging M5, build `:app:bundleRelease`, install the resulting AAB via `bundletool build-apks --connected-device`, and complete one full IAP loop on the device. Debug builds passing means nothing for R8.
+
+### 3.9 Offline & error handling
+
+| Surface | Offline behavior |
+|---|---|
+| Banner | `AdView.loadAd()` fails silently → empty 50dp gap. Acceptable. |
+| Interstitial | `loadAd` fails → controller stays in `NotLoaded` state, never shows. Acceptable. |
+| First-launch UMP | No network → `consentInformation.requestConsentInfoUpdate()` returns an error → treat as "consent unknown" → don't init ads this session, retry on next launch. |
+| Purchase flow | Detect `ConnectivityManager` no-network → disable Buy button + show "You're offline" inline. Don't even attempt `launchBillingFlow`. |
+| Restore | Show "Offline — try again when connected" inline; don't fire `queryPurchases()`. |
+
 ---
 
 ## 4. UX rules (non-negotiable, keeps 1-star reviews down)
@@ -125,6 +210,8 @@ Real IDs come from the AdMob console **after** the app is reviewed and approved 
 | Pro purchase removes ad surfaces immediately (no app restart) | Reactive Flow from `PurchaseRepository` handles this |
 | Restore Purchases is one tap, always visible in the Pro sheet | Required by Play policy; failing this = rejection |
 | Failed purchase shows an inline error, not a toast that vanishes | Conversion path must surface what went wrong |
+| **Banner is ≥ 50dp from any tappable** (count steppers, gear, history icon) | AdMob policy — failing this risks ad account suspension, not just rejection |
+| **Existing v1.0.2 users see the UMP consent on first launch post-update** | Plan accordingly: release notes should say "we've added an option to remove ads + a privacy/consent dialog" so it's not surprise behavior |
 
 ---
 
@@ -143,16 +230,20 @@ Real IDs come from the AdMob console **after** the app is reviewed and approved 
 
 ## 6. Implementation phases (each = its own PR off this branch)
 
-| Phase | PR title | Scope |
-|---|---|---|
-| M1 | `feat(billing): scaffold PurchaseRepository + Entitlement state` | Billing client, query, restore, DataStore persistence. No UI. Unit tests on `Entitlement` reducer. |
-| M2 | `feat(monetization): Pro upgrade sheet + Settings entry point` | Settings row, bottom sheet, restore button. Mocks `BillingClientWrapper` in tests. |
-| M3 | `feat(ads): consent + AdsInitializer + banner on RollScreen (test IDs)` | UMP gate, MobileAds init, BannerAdView composable. Pro flag hides banner. |
-| M4 | `feat(ads): interstitial controller with cadence gate` | Pure `AdCadence` rules + tests, then wire into `RollViewModel.onRollSettled`. |
-| M5 | `docs+chore: privacy policy update + Data Safety prep + release-1.1.0 notes` | Update `play-store/` content, bump `versionCode`/`versionName`, write release notes. |
-| M6 | `chore(release): switch to real AdMob unit IDs` | After v1.1.0 is live in internal testing and AdMob has linked the app. |
+Each phase has a **Definition of Done (DoD)** — concrete checks that must pass before the PR merges. "Scaffolded" is not done.
 
-M1–M5 ship as one merge into `main` as **v1.1.0 internal testing build**. M6 is a follow-up patch.
+| Phase | PR title | Est. effort | Scope | DoD |
+|---|---|---|---|---|
+| M1 | `feat(billing): scaffold PurchaseRepository + Entitlement state` | 1 weekend | Billing client connect/disconnect, query products, query existing purchases, DataStore persistence | Unit tests on Entitlement reducer (`PURCHASED → Pro`, `PENDING → Free`, `revoked → Free`); manual: license-tester account completes test buy on internal track |
+| M2 | `feat(monetization): Pro upgrade sheet + Settings entry point` | 1 weekend | "Remove Ads" settings row, bottom-sheet UI, Restore button, offline + error states | Manual: test buy from sheet, restore on fresh install, offline state shows correct disabled UI |
+| M3 | `feat(ads): consent + AdsInitializer + banner on RollScreen (test IDs)` | 1 weekend | UMP consent flow, lazy MobileAds init, BannerAdView with DisposableEffect lifecycle | Banner loads on test IDs; Pro flag hides it within 1 frame; rotate device 10× → no leak (verify via `adb shell dumpsys meminfo`) |
+| M4 | `feat(ads): interstitial controller with cadence gate` | 0.5 weekend | Pure `AdCadence` unit-tested first, then wired into roll loop | Unit tests for cadence (cooldown, first-5-rolls-skip, 10th-roll-trigger); manual: 12 rolls show exactly 1 interstitial |
+| M5 | `docs+chore: privacy policy update + Data Safety prep + release-1.1.0 notes + R8 verify` | 0.5 weekend | Update `play-store/`, bump version, write release notes, run release-build IAP smoke test | `:app:bundleRelease` installs and completes one full IAP loop on the device |
+| M6 | `chore(release): switch to real AdMob unit IDs` | 1 hour | After v1.1.0 is live in internal testing and AdMob has linked the app | Real banner + interstitial render with non-test labels; AdMob console shows impressions |
+
+**Total estimate:** ~4 weekends of focused work + ~1 week of external lead time (banking, AdMob review).
+
+**Release track ladder:** internal (license testers only, real billing) → closed (10–20 friends) → open (public beta, optional) → production. Every phase merges to `main` and ships to **internal** first. Production rollout only after M6 + a clean week on closed testing.
 
 ---
 
@@ -173,11 +264,58 @@ M1–M5 ship as one merge into `main` as **v1.1.0 internal testing build**. M6 i
 - No analytics / Firebase. Adds privacy surface + Data Safety complexity for ~zero useful signal at this DAU.
 - No A/B testing infra. Premature for a portfolio-tier project.
 - No server. All entitlement state local; reconciled via `BillingClient.queryPurchases()` on launch.
-- No multi-die-type-in-one-roll. That gap from the audit ships in **1.0.3** (separate branch) before 1.1.0.
+- No multi-die-type-in-one-roll. That gap from the audit ships in **1.0.3** (separate branch) before 1.1.0. → see `MULTI-DIE-PLAN.md` (TBD).
 
 ---
 
 ## 9. Decision log
 
+### 2026-06-27
+- Folded gap-find feedback into the plan:
+  - Added §0 pre-flight (merchant/tax/AdMob lead times, promo codes, privacy hosting decision = GitHub Pages).
+  - §3.4 expanded with AdView `DisposableEffect` lifecycle + lazy MobileAds init.
+  - §3.5 expanded with purchase-state matrix (incl. UPI `PENDING`), revoke handling, Family Library OFF.
+  - New §3.8 ProGuard / R8 keep rules + release-build IAP smoke test as a gate.
+  - New §3.9 offline & error handling per surface.
+  - §4 added AdMob 50dp tap-target rule + first-launch-post-update UMP UX note.
+  - §6 added Definition of Done per phase, effort estimates (~4 weekends), and the internal → closed → open → prod release-track ladder.
+  - New §10 rollback / kill switch (BuildConfig + remote JSON override).
+
 ### 2026-06-24
 - Plan drafted. Hybrid AdMob + one-time IAP. No subscriptions. UMP for consent. Test IDs throughout dev; real IDs only for release builds. Defaults locked unless overridden in §7.
+
+---
+
+## 10. Rollback / kill switch
+
+Ads tanking retention shouldn't require a 4-hour rebuild + Play rollout. Two-layer kill switch:
+
+### Layer 1 — Compile-time (always present)
+
+`BuildConfig.ADS_ENABLED: Boolean` — defaults `true`. Setting it to `false` and shipping a patch disables all ad surfaces immediately. Both `BannerAdView` and `InterstitialController` short-circuit on this flag.
+
+```kotlin
+// app/build.gradle.kts
+buildConfigField("boolean", "ADS_ENABLED", "true")
+```
+
+### Layer 2 — Runtime override (fetched at launch)
+
+A 1-line JSON hosted at `https://urmillive.github.io/dice-rollar-legal/config.json`:
+
+```json
+{ "ads_enabled": true, "interstitial_cadence": 10, "interstitial_cooldown_seconds": 60 }
+```
+
+`KillSwitchFetcher` fetches with a 3 s timeout on app launch; on failure or stale (>24 h) cache, uses BuildConfig defaults. Lets you turn ads off **without** shipping a new APK — useful for "AdMob suspended my account at 2 AM" or "interstitials are causing 30% bounce."
+
+**No Firebase Remote Config** — the static JSON is enough for kill switches and avoids the Firebase SDK bulk + Data Safety implications.
+
+### Triage thresholds (when to flip the switch)
+
+| Signal | Threshold | Action |
+|---|---|---|
+| Play Console crash-free users | < 99% over 24h | Flip `ads_enabled = false`, investigate |
+| Day-1 retention | drop > 10pp vs. v1.0.2 baseline | Flip interstitials off (set cadence to 9999), keep banner |
+| Review average | drops below 4.0 over 7 days | Read every new 1–2 star review, react |
+| AdMob account warning email | any | Stop the bleed immediately — flip ads off via Layer 2 |
